@@ -10,7 +10,7 @@ format:
 
 ## OOP Programming
 a. Here's the inclusion of gcd and lcm method using Rcpp
-```{r}
+```{r, message=FALSE, warning=FALSE}
 library(Rcpp)
 cppFunction('
 #include <numeric>
@@ -78,7 +78,7 @@ setMethod('simplify', 'rational', function(object) {
   return(rational(new_num, new_den))
 })
 
-setGeneric('quotient', function(object, digits = 4) standardGeneric('quotient'))
+setGeneric('quotient', function(object, digits = 1) standardGeneric('quotient'))
 
 setMethod('quotient', 'rational', function(object, digits = 1) {
   # round() will floor the digits if it's not integer
@@ -266,6 +266,57 @@ fig <- fig %>%
 fig
 ```
 
+
+## data.table
+```{r, warning=FALSE, message=FALSE}
+# prepare data
+library(nycflights13)
+library(data.table)
+data(flights); data(airports)
+setDT(flights)
+setDT(airports)
+```
+a. first table
+```{r}
+# summary statistics
+table1 <- flights[, .(
+  mean_delay = mean(dep_delay, na.rm = TRUE),
+  median_delay = median(dep_delay, na.rm = TRUE),
+  n_flights = .N
+), by = origin][n_flights >= 10]
+# join with origin for no match
+table1 <- merge(table1[, faa := origin], airports,
+                by = "faa", all.x = TRUE)
+table1[, .(name, mean_delay, median_delay)][order(-mean_delay)]
+```
+second table
+```{r}
+# summary statistics
+table2 <- flights[, .(
+  mean_delay = mean(arr_delay, na.rm = TRUE),
+  median_delay = median(arr_delay, na.rm = TRUE),
+  n_flights = .N
+), by = dest][n_flights >= 10]
+table2 <- merge(table2[, faa := dest], airports,
+                by = "faa", all.x = TRUE)
+table2 <- table2[, name := ifelse(is.na(name), dest, name)]
+table2 <- table2[, .(name, mean_delay, median_delay)][order(-mean_delay)]
+print(table2, nrows = 102)
+```
+b. Here's the table
+```{r}
+data(planes)
+setDT(planes)
+
+table3 <- merge(flights, planes,
+                by = "tailnum", all.x = TRUE)
+table3 <- table3[, mph := 60 * distance / air_time]
+table3 <- table3[, .(
+  avg_mph = mean(mph, na.rm = TRUE),
+  n_flights = .N
+), by = model]
+table3[order(-avg_mph)][1]
+```
 
 
 
