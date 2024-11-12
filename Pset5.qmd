@@ -317,6 +317,8 @@ table3 <- table3[, .(
 ), by = model]
 table3[order(-avg_mph)][1]
 ```
-
+## Citation & Link to GitHub
+* [Plotly Dropdown Menu](https://plotly.com/r/dropdowns/)
+* [Github Repo](https://github.com/haiming12138/stats506_hw5)
 
 
