@@ -1,0 +1,271 @@
+---
+title: 'STATS 506 Problem Set #5'
+author: 'Haiming Li'
+format: 
+  html:
+    embed-resources: true
+    toc: true
+    smooth-scroll: true
+---
+
+## OOP Programming
+a. Here's the inclusion of gcd and lcm method using Rcpp
+```{r}
+library(Rcpp)
+cppFunction('
+#include <numeric>
+int gcd(int a, int b) {
+  return std::gcd(a, b);
+}')
+
+cppFunction('
+#include <numeric>
+int lcm(int a, int b) {
+  return std::lcm(a, b);
+}
+')
+```
+
+Here's the class definition and class methods.
+```{r, message=FALSE}
+
+setClass('rational',
+         slots = list(numerator = 'integer', 
+                      denominator = 'integer'))
+
+##' Constructor
+##' @param numerator An integer value
+##' @param denominator An none zero integer value
+##' @return
+##' @export
+rational <- function(numerator = 0, denominator = 1) {
+  if (!is.numeric(numerator) | !is.numeric(denominator)) {
+    stop('both numerator and denominator must be integer')
+  }
+  if (numerator != as.integer(numerator) | 
+      denominator !=as.integer(denominator)) {
+    stop('both numerator and denominator cannot be floating point')
+  }
+  return(new('rational', numerator = as.integer(numerator), 
+      denominator = as.integer(denominator)))
+}
+
+setValidity('rational', function(object){
+  if (object@denominator == 0L) {
+    stop('denominator cannot be 0')
+  }
+  return(TRUE)
+})
+
+setMethod('show', 'rational',
+          function(object) {
+            cat(object@numerator, '/', object@denominator, '\n')
+            return(invisible(object))
+          })
+
+setGeneric('simplify', function(object) standardGeneric('simplify'))
+
+setMethod('simplify', 'rational', function(object) {
+  # compute the unsigned greatest common divisor
+  divisor <- gcd(abs(object@numerator), abs(object@denominator))
+  # simplify the fraction and sign
+  new_num <- object@numerator / divisor
+  new_den <- object@denominator / divisor
+  if (new_num < 0 & new_den < 0) {
+    new_num <- abs(new_num)
+    new_den <- abs(new_den)
+  }
+  return(rational(new_num, new_den))
+})
+
+setGeneric('quotient', function(object, digits = 4) standardGeneric('quotient'))
+
+setMethod('quotient', 'rational', function(object, digits = 1) {
+  # round() will floor the digits if it's not integer
+  if (!is.numeric(digits) | digits < 0) {
+    stop('digit must be none negative real number')
+  }
+  quotient_value <- object@numerator / object@denominator
+  print(round(quotient_value, digits))
+  return(invisible(quotient_value))
+})
+
+setMethod('+', signature(e1 = 'rational', e2 = 'rational'), function(e1, e2) {
+  denom <- lcm(e1@denominator, e2@denominator)
+  numer <- (e1@numerator * (denom / e1@denominator)) + 
+    (e2@numerator * (denom / e2@denominator))
+  return(simplify(rational(numer, denom)))
+})
+
+setMethod('-', signature(e1 = 'rational', e2 = 'rational'), function(e1, e2) {
+  denom <- lcm(e1@denominator, e2@denominator)
+  numer <- (e1@numerator * (denom / e1@denominator)) - 
+    (e2@numerator * (denom / e2@denominator))
+  return(simplify(rational(numer, denom)))
+})
+
+setMethod('*', signature(e1 = 'rational', e2 = 'rational'), function(e1, e2) {
+  numer <- e1@numerator * e2@numerator
+  denom <- e1@denominator * e2@denominator
+  return(simplify(rational(numer, denom)))
+})
+
+setMethod('/', signature(e1 = 'rational', e2 = 'rational'), function(e1, e2) {
+  numer <- e1@numerator * e2@denominator
+  denom <- e1@denominator * e2@numerator
+  if (denom == 0L) stop('division by zero')
+  return(simplify(rational(numer, denom)))
+})
+```
+b. Here's the demonstration
+```{r, error=TRUE}
+r1 <- rational(24, 6)
+r2 <- rational(7, 230)
+r3 <- rational(0, 4)
+r1
+r3
+r1 + r2
+r1 - r2
+r1 * r2
+r1 / r2
+r1 + r3
+r1 * r3
+r2 / r3
+quotient(r1)
+quotient(r2)
+quotient(r2, digits = 3)
+quotient(r2, digits = 3.14)
+quotient(r2, digits = 'avocado')
+q2 <- quotient(r2, digits = 3)
+q2
+quotient(r3)
+simplify(r1)
+simplify(r2)
+simplify(r3)
+```
+c. Here's the checking of malformed input to constructor
+```{r, error=TRUE}
+rational(1, 0)
+rational(3.14, 1)
+rational(1, 3.14)
+rational('A', 1)
+rational(1, 'A')
+```
+
+## Plotly
+a. Here's the recreation using plotly
+```{r, message=FALSE, warning=FALSE}
+library(tibble)
+library(dplyr)
+library(reshape2)
+library(plotly)
+
+# read & proces data (same as Pset4)
+df <- as_tibble(read.csv('./df_for_ml_improved_new_market.csv'))
+genre_columns <- grep('Genre___', colnames(df), value = TRUE)
+genre_data <- df[, c('id', 'year', 'price_usd', genre_columns)] %>%
+  melt(id.vars = c('id', 'year', 'price_usd')) %>%
+  filter(value == 1) %>%
+  mutate(genre=sub('Genre___', '', variable)) %>%
+  select(id, year, price_usd, genre)
+
+# Ex: If the genre is both 'Other' and 'Painting', the final genre should be
+#     'Painting'
+genre_priority <- c('Photography', 'Print', 'Sculpture', 'Painting', 'Others')
+genre_data$genre <- factor(genre_data$genre, levels = genre_priority)
+df <- genre_data[!duplicated(genre_data$id), 2:4]
+genre_data <- df %>%
+  count(year, genre) %>%
+  group_by(year) %>%
+  mutate(percent = n / sum(n))
+
+plot_ly(data = genre_data, x = ~percent, y = ~year, color = ~genre,
+        type = 'bar', orientation = 'h') %>%
+  layout(
+    barmode = 'stack',
+    title = 'Genre Distribution Over Years',
+    xaxis = list(title = 'Percentage'),
+    yaxis = list(
+      title = 'Year',
+      tickmode = 'array',
+      tickvals = unique(genre_data$year),
+      ticktext = unique(genre_data$year),
+      categoryorder = 'trace'
+    ),
+    legend = list(title = list(text = 'Genre'))
+  )
+```
+
+b. Here's the interactive plot
+```{r, message=FALSE}
+plot_data <- df %>%
+  group_by(year, genre) %>%
+  summarize(avg_price_usd = mean(price_usd, na.rm = TRUE)) %>%
+  ungroup()
+
+traces <- list()
+
+# overall trend
+overall_trace <- plot_data %>%
+  group_by(year) %>%
+  summarize(avg_price_usd = mean(avg_price_usd, na.rm = TRUE))
+
+traces[['Overall']] <- list(
+  x = overall_trace$year,
+  y = overall_trace$avg_price_usd,
+  type = 'scatter',
+  mode = 'lines+markers',
+  name = 'Overall'
+)
+
+# genre-specific trend
+genres <- unique(plot_data$genre)
+for (genre in genres) {
+  genre_trace <- plot_data %>% filter(genre == !!genre)
+  
+  traces[[genre]] <- list(
+    x = genre_trace$year,
+    y = genre_trace$avg_price_usd,
+    type = 'scatter',
+    mode = 'lines+markers',
+    name = genre
+  )
+}
+
+fig <- plot_ly()
+for (trace_name in names(traces)) {
+  fig <- fig %>%
+    add_trace(
+      x = traces[[trace_name]]$x,
+      y = traces[[trace_name]]$y,
+      type = traces[[trace_name]]$type,
+      mode = traces[[trace_name]]$mode,
+      name = trace_name,
+      visible = ifelse(trace_name == 'Overall', TRUE, FALSE)
+    )
+}
+
+# drop down menu
+fig <- fig %>%
+  layout(
+    title = 'Change in Sales Price Over Time by Genre',
+    xaxis = list(title = 'Year'),
+    yaxis = list(title = 'Average Price (USD)'),
+    updatemenus = list(list(
+        buttons = lapply(names(traces), function(genre) {
+          list(
+            method = 'update',
+            # only show selected button serie
+            args = list(list(visible = sapply(names(traces), function(x) x == genre))),
+            label = genre
+          )}),
+        direction = 'down',
+        x = 0.08,
+        y = 1.1
+      )))
+fig
+```
+
+
+
+
